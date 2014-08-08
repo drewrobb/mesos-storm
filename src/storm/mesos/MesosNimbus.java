@@ -465,20 +465,19 @@ public class MesosNimbus implements INimbus {
           }
         }
       }
-      List<TaskInfo> launchList = new ArrayList<>();
-      List<OfferID> launchOffers = new ArrayList<>();
+
       for (OfferID id : toLaunch.keySet()) {
         List<LaunchTask> tasks = toLaunch.get(id);
+        List<TaskInfo> launchList = new ArrayList<>();
 
         LOG.info("Launching tasks for offer " + id.getValue() + "\n" + tasks.toString());
         for (LaunchTask t : tasks) {
           launchList.add(t.task);
           used_offers.put(t.task.getTaskId(), t.offer);
         }
-        launchOffers.add(id);
         _offers.remove(id);
+        _driver.launchTasks(Arrays.asList(id), launchList);
       }
-      _driver.launchTasks(launchOffers, launchList);
     }
   }
 
