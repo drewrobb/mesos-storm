@@ -545,13 +545,16 @@ public class MesosNimbus implements INimbus {
                 subtractedExecutorResources = true;
               }
 
+              String executorName = "storm-" + details.getId() + "-" + slot.getNodeId();
+              String taskName = executorName + ":" + slot.getPort();
               String executorDataStr = JSONValue.toJSONString(executorData);
-              LOG.info("Launching task with Mesos Executor data: <" + executorDataStr + ">");
+              LOG.info("Launching task " + taskName + " with Mesos Executor data: <" + executorDataStr + ">");
               TaskInfo task = TaskInfo.newBuilder()
-                  .setName("worker " + slot.getNodeId() + ":" + slot.getPort())
+                  .setName(taskName)
                   .setTaskId(taskId)
                   .setSlaveId(offer.getSlaveId())
                   .setExecutor(ExecutorInfo.newBuilder()
+                          .setName(executorName)
                           .setExecutorId(ExecutorID.newBuilder().setValue(details.getId()))
                           .setData(ByteString.copyFromUtf8(executorDataStr))
                           .setCommand(CommandInfo.newBuilder()
