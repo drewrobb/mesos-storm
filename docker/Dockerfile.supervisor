@@ -1,0 +1,35 @@
+#
+# Dockerfile.supervisor for Storm Supervisor Mesos framework
+#
+FROM mesosphere/mesos:0.23.0-1.0.ubuntu1404
+MAINTAINER Paul Read <pdread101@gmail.com>
+
+# build packages
+
+ENV DEBIAN_FRONTEND noninteractive
+RUN apt-get update
+RUN apt-get install -y software-properties-common python-software-properties
+RUN add-apt-repository ppa:openjdk-r/ppa -y
+RUN apt-get update
+RUN apt-get install -yq openjdk-8-jdk
+RUN apt-get remove -yq openjdk-7-jre-headless
+RUN apt-get install -y mesos
+
+# export environment
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
+
+ENV MESOS_NATIVE_JAVA_LIBRARY /usr/lib/libmesos.so
+
+# This is to let the logviewer out. If the logviewer takes
+# to using dynamic ports, as it should, then this stratagy would have to change.
+#
+EXPOSE 8000
+
+# copy local checkout into /opt/storm
+ADD . /opt/storm
+
+WORKDIR /opt/storm
+
+CMD ["supervisor"]
+
+ENTRYPOINT ["/opt/storm/bin/storm-mesos"]

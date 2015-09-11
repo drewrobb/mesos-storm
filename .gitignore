@@ -6,3 +6,7 @@ _release
 *.iml
 dependency-reduced-pom.xml
 /build/
+*.zip
+*.tgz
+*.tar
+_docker
