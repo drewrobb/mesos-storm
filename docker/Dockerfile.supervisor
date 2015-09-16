@@ -14,6 +14,7 @@ RUN apt-get update
 RUN apt-get install -yq openjdk-8-jdk
 RUN apt-get remove -yq openjdk-7-jre-headless
 RUN apt-get install -y mesos
+RUN apt-get install -y python-pip && pip install awscli
 
 # export environment
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
