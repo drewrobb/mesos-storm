@@ -19,10 +19,9 @@ package storm.mesos;
 
 import backtype.storm.Config;
 import backtype.storm.scheduler.*;
-import backtype.storm.utils.LocalState;
 import com.google.common.base.Optional;
 import com.google.protobuf.ByteString;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.mesos.MesosSchedulerDriver;
 import org.apache.mesos.Protos;
@@ -35,6 +34,9 @@ import org.apache.mesos.Protos.Value.Type;
 import org.apache.mesos.SchedulerDriver;
 import org.json.simple.JSONValue;
 import org.yaml.snakeyaml.Yaml;
+import storm.mesos.shims.CommandLineShimFactory;
+import storm.mesos.shims.ICommandLineShim;
+import storm.mesos.shims.LocalStateShim;
 
 import java.io.*;
 import java.net.MalformedURLException;
@@ -70,7 +72,7 @@ public class MesosNimbus implements INimbus {
   private static final Logger LOG = Logger.getLogger(MesosNimbus.class);
   private final Object _offersLock = new Object();
   protected java.net.URI _configUrl;
-  LocalState _state;
+  LocalStateShim _state;
   NimbusScheduler _scheduler;
   volatile SchedulerDriver _driver;
   Timer _timer = new Timer();
@@ -144,7 +146,7 @@ public class MesosNimbus implements INimbus {
     _conf = new HashMap();
     _conf.putAll(conf);
 
-    _state = new LocalState(localDir);
+    _state = new LocalStateShim(localDir);
     _allowedHosts = listIntoSet((List<String>) conf.get(CONF_MESOS_ALLOWED_HOSTS));
     _disallowedHosts = listIntoSet((List<String>) conf.get(CONF_MESOS_DISALLOWED_HOSTS));
     Boolean preferReservedResources = (Boolean) conf.get(CONF_MESOS_PREFER_RESERVED_RESOURCES);
@@ -176,12 +178,7 @@ public class MesosNimbus implements INimbus {
 
   public void doRegistration(final SchedulerDriver driver, Protos.FrameworkID id) {
     _driver = driver;
-    try {
-      _state.put(FRAMEWORK_ID, id.getValue());
-    } catch (IOException e) {
-      LOG.error("Halting process...", e);
-      Runtime.getRuntime().halt(1);
-    }
+    _state.put(FRAMEWORK_ID, id.getValue());
     Number filterSeconds = Optional.fromNullable((Number) _conf.get(CONF_MESOS_OFFER_FILTER_SECONDS)).or(120);
     final Protos.Filters filters = Protos.Filters.newBuilder()
         .setRefuseSeconds(filterSeconds.intValue())
@@ -794,18 +791,12 @@ public class MesosNimbus implements INimbus {
         if (executorPortsResources != null) {
           executorInfoBuilder.addAllResources(executorPortsResources);
         }
+        ICommandLineShim commandLineShim = CommandLineShimFactory.makeCommandLineShim(_container.isPresent(), extraConfig);
         if (_container.isPresent()) {
-          // An ugly workaround for a bug in DCOS
-          Map<String, String> env = System.getenv();
-          String javaLibPath = env.get("MESOS_NATIVE_JAVA_LIBRARY");
-
           executorInfoBuilder
               .setCommand(CommandInfo.newBuilder()
                   .addUris(URI.newBuilder().setValue(configUri))
-                  .setValue(
-                      "export MESOS_NATIVE_JAVA_LIBRARY=" + javaLibPath +
-                          " && /bin/cp $MESOS_SANDBOX/storm.yaml conf && /usr/bin/python bin/storm " +
-                          "supervisor storm.mesos.MesosSupervisor -c storm.log.dir=$MESOS_SANDBOX/logs" + extraConfig))
+                  .setValue(commandLineShim.getCommandLine()))
               .setContainer(
                   ContainerInfo.newBuilder()
                       .setType(ContainerInfo.Type.DOCKER)
@@ -823,8 +814,7 @@ public class MesosNimbus implements INimbus {
               .setCommand(CommandInfo.newBuilder()
                   .addUris(URI.newBuilder().setValue((String) _conf.get(CONF_EXECUTOR_URI)))
                   .addUris(URI.newBuilder().setValue(configUri))
-                  .setValue("cp storm.yaml storm-mesos*/conf && cd storm-mesos* && python bin/storm " +
-                      "supervisor storm.mesos.MesosSupervisor" + extraConfig));
+                  .setValue(commandLineShim.getCommandLine()));
         }
 
         LOG.info("Launching task with Mesos Executor data: <"
@@ -854,8 +844,6 @@ public class MesosNimbus implements INimbus {
   }
 
   private FrameworkInfo.Builder createFrameworkBuilder() throws IOException {
-
-    String id = (String) _state.get(FRAMEWORK_ID);
     Number failoverTimeout = Optional.fromNullable((Number) _conf.get(CONF_MASTER_FAILOVER_TIMEOUT_SECS)).or(24 * 7 * 3600);
     String role = Optional.fromNullable((String) _conf.get(CONF_MESOS_ROLE)).or("*");
     Boolean checkpoint = Optional.fromNullable((Boolean) _conf.get(CONF_MESOS_CHECKPOINT)).or(false);
@@ -867,6 +855,8 @@ public class MesosNimbus implements INimbus {
         .setUser("")
         .setRole(role)
         .setCheckpoint(checkpoint);
+
+    String id = _state.get(FRAMEWORK_ID);
 
     if (id != null) {
       finfo.setId(FrameworkID.newBuilder().setValue(id).build());
