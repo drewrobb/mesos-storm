@@ -39,6 +39,8 @@ import storm.mesos.shims.ICommandLineShim;
 import storm.mesos.shims.LocalStateShim;
 
 import java.io.*;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Path;
@@ -864,6 +866,20 @@ public class MesosNimbus implements INimbus {
 
     return finfo;
   }
+  //Super ugly method but it only gets called once.
+  private Method getCorrectSetSecretMethod(Class clazz) {
+    try {
+      return clazz.getMethod("setSecretBytes", ByteString.class);
+    } catch (NoSuchMethodException e) {
+      try {
+        return clazz.getMethod("setSecret", ByteString.class);
+      } catch (NoSuchMethodException e2) {
+        //maybe overkill and we should just return a null but if we're passing auth
+        //we probably want this versus an an auth error if the contracts change in say 0.27.0
+        throw new RuntimeException("Unable to find a setSecret method!", e2);
+      }
+    }
+  }
 
   private Credential getCredential(FrameworkInfo.Builder finfo) {
     LOG.info("Checking for mesos authentication");
@@ -880,12 +896,21 @@ public class MesosNimbus implements INimbus {
       if (StringUtils.isNotEmpty(secretFilename)) {
         try {
           // The secret cannot have a NewLine after it
-          credentialBuilder.setSecret(ByteString.readFrom(new FileInputStream(secretFilename)));
+          //credentialBuilder.setSecret(ByteString.readFrom(new FileInputStream(secretFilename)));
+          ByteString secret = ByteString.readFrom(new FileInputStream(secretFilename));
+          Method setSecret = getCorrectSetSecretMethod(credentialBuilder.getClass());
+          setSecret.invoke(credentialBuilder, secret);
         } catch (FileNotFoundException ex) {
           LOG.error("Mesos authentication secret file was not found", ex);
           throw new RuntimeException(ex);
         } catch (IOException ex) {
           LOG.error("Error reading Mesos authentication secret file", ex);
+          throw new RuntimeException(ex);
+        } catch (InvocationTargetException ex) {
+          LOG.error("Reflection Error", ex);
+          throw new RuntimeException(ex);
+        } catch (IllegalAccessException ex) {
+          LOG.error("Reflection Error", ex);
           throw new RuntimeException(ex);
         }
       }
@@ -893,5 +918,4 @@ public class MesosNimbus implements INimbus {
     }
     return credential;
   }
-
 }

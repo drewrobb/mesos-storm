@@ -53,7 +53,6 @@ public class LocalStateShim implements ILocalStateShim {
     ArrayList<JavaObjectArg> tmpList = new ArrayList<JavaObjectArg>();
     tmpList.add(JavaObjectArg.string_arg(value));
     _state.put(key, new JavaObject("java.lang.String", tmpList));
-
   }
 
   public void remove(String key) {
