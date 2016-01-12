@@ -27,9 +27,9 @@
     <java.abi>1.7</java.abi>
     <maven.compiler.source>1.7</maven.compiler.source>
     <maven.compiler.target>1.7</maven.compiler.target>
-    <storm.default.version>0.9.6</storm.default.version>
-    <mesos.default.version>0.24.1</mesos.default.version>
-    <mesos.version>0.24.1</mesos.version>
+    <storm.default.version>0.10.0</storm.default.version>
+    <mesos.default.version>0.26.0</mesos.default.version>
+    <mesos.version>0.26.0</mesos.version>
   </properties>
 
   <profiles>
